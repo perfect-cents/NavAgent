@@ -11,16 +11,17 @@ from dronekit import Command, connect, LocationGlobal, LocationGlobalRelative, V
 from pymavlink import mavutil
 
 
-
-PARSER = argparse.ArgumentParser(description='External Argument Parser for NavAgent.')
-PARSER.add_argument('--connect',
+PARSER = argparse.ArgumentParser(description="External Argument Parser for NavAgent.")
+PARSER.add_argument("--connect",
                     help=("vehicle connection target string. "
                           "If not specified, SITL automatically started and used."))
 
 PARSER_ARGS = PARSER.parse_args()
 
 CONNECTION_STRING = PARSER_ARGS.connect
-CONNECTION_STRING = 'udp:127.0.0.1:14550'   # LAZY! change
+CONNECTION_STRING = "udp:127.0.0.1:14550"   # LAZY! change
+
+'''
 
 SITL = None
 
@@ -29,21 +30,15 @@ if not CONNECTION_STRING: # Start SITL if no connection string specified
     SITL = dronekit_sitl.start_default()
     CONNECTION = SITL.connection_string()
 
-print 'Connecting to vehicle on: %s' % CONNECTION_STRING
+'''
+
+print "Connecting to vehicle on: %s" % CONNECTION_STRING
 VEHICLE = connect(CONNECTION_STRING, wait_ready=True, vehicle_class=Vehicle)
 
-print  'Setting Home Location...'
+print "Setting Home Location..."
 VEHICLE.home_location = VEHICLE.location.global_frame
 
 CMDS = VEHICLE.commands
-
-print "Clearing any existing commands..."
-CMDS.clear()
-
-#### Input Initial Commands ####
-
-print "Uploading new commands..."
-CMDS.upload()
 
 def get_location(meters_north, meters_east,
                  original_location=VEHICLE.location.global_relative_frame):
@@ -79,7 +74,9 @@ def get_distance(a_location, b_location):
     return math.sqrt((d_lat*d_lat) + (d_long*d_long)) * 1.113195e5
 
 def get_bearing(a_location=VEHICLE.location.global_relative_frame,
-                b_location=VEHICLE.commands.next):
+                b_location=LocationGlobalRelative(VEHICLE.commands[VEHICLE.commands.next-1].x,
+                                                  VEHICLE.commands[VEHICLE.commands.next-1].y,
+                                                  VEHICLE.commands[VEHICLE.commands.next-1].z)):
     """ Input two global_frame or global_relative_frames.
     Returns the yaw/bearing in degrees starting clockwise from the north.
     """
@@ -94,64 +91,21 @@ def get_bearing(a_location=VEHICLE.location.global_relative_frame,
 
     return bearing
 
-def distance_to_next_waypoint():
+def dist_till_wp():
     """ Returns the distance to the next command i.e. next waypoint in meters."""
 
-    if NEXT_WAYPOINT == 0:
+    if VEHICLE.commands.next == 0:
         return None
 
-    cmd = VEHICLE.commands[NEXT_WAYPOINT-1] #commands are zero indexed
+    cmd = VEHICLE.commands[VEHICLE.commands.next-1] #commands are zero indexed
     lat = cmd.x
     lon = cmd.y
     alt = cmd.z
     target_waypoint_location = LocationGlobalRelative(lat, lon, alt)
-    distance_to_waypoint = get_distance(VEHICLE.location.global_frame, target_waypoint_location)
+    distance_to_waypoint = get_distance(VEHICLE.location.global_relative_frame,
+                                        target_waypoint_location)
 
     return distance_to_waypoint
-
-
-def arm_and_takeoff(target_alt):
-    """ Arms the Copter for Takeoff and Launches it to a target_alt."""
-
-    print "basic pre-arm checks..."
-    # don't let the user try to arm until autopilot is ready
-    while not VEHICLE.is_armable:
-        print " waiting for vehicle to initialise..."
-        time.sleep(1)
-
-    print "arming motors..."
-    # copter should arm in guided mode
-    VEHICLE.mode = VehicleMode("GUIDED")
-    VEHICLE.armed = True
-
-    while not VEHICLE.armed:
-        print "waiting for arming..."
-        time.sleep(1)
-
-    print "taking off from ({},{})".format(VEHICLE.home_location.lat,
-                                           VEHICLE.home_location.lon)
-    VEHICLE.simple_takeoff(target_alt)
-
-    while True:
-        print "altitude: ", VEHICLE.location.global_relative_frame.alt
-        if VEHICLE.location.global_relative_frame.alt >= target_alt * .95:
-            print "reached target altitude"
-            break
-        time.sleep(1)
-
-def closing_seq():
-    #print 'Returning to Launch...'
-    #VEHICLE.mode = VehicleMode("RTL")
-
-    print "Setting LAND mode..."
-    VEHICLE.mode = VehicleMode("LAND")
-
-    print "Close vehicle object"
-    VEHICLE.close()
-
-    if SITL is not None:
-        SITL.stop()
-
 
 def insert_waypoint(lat, lon, alt, nxt):
     CMDS.download()
@@ -178,6 +132,8 @@ def go_up(lat=VEHICLE.location.global_relative_frame.lat,
           lon=VEHICLE.location.global_relative_frame.lon,
           alt=VEHICLE.location.global_relative_frame.alt,
           nxt=0):
+    """ Go Up Doc."""
+
     CMDS.download()
     CMDS.wait_ready() # BIG FIX!!!: Incorperate threading
 
@@ -198,21 +154,75 @@ def go_up(lat=VEHICLE.location.global_relative_frame.lat,
 
     CMDS.upload()
 
-arm_and_takeoff(10)
 
-print "Starting mission"
-VEHICLE.commands.next = 0 # Reset mission set to first (0) waypoint
-NEXT_WAYPOINT = VEHICLE.commands.next
+def read_wp_file(path):
+    """ Reads a standard QGC Waypoint 110 File, and Returns a cmd_list."""
+
+    cmd_list = []
+
+    with open(path) as file_:
+        for i, line in enumerate(file_):
+            if i == 0:
+                if not line.startswith("QGC WPL 110"):
+                    raise Exception("Wrong Formatting")
+            else:
+                ln_arr = line.split('\t')
+
+                target_system = 0    # For both 'target' 0 is brodcast
+                target_component = 0 # if you need to tell something inside the MAVLink
+                                     # network specify an id
+
+                index = int(ln_arr[0]) # Not Supported by Dronekit.
+                                       # Automatically Set on Upload by cmd_list index
+                curr_wp = int(ln_arr[1]) # Not Supported by Dronekit.
+                                         # However, use VEHICLE.commands.next
+                                         # to see the index val for the curr_wp
+                frame = int(ln_arr[2])
+                command = int(ln_arr[3])
+
+                param1 = float(ln_arr[4])
+                param2 = float(ln_arr[5])
+                param3 = float(ln_arr[6])
+                param4 = float(ln_arr[7])
+                param5 = float(ln_arr[8]) # Usually lattitude
+                param6 = float(ln_arr[9]) # Usually Longitude
+                param7 = float(ln_arr[10]) # Usually Altitude
+
+                auto_continue = int(ln_arr[11].strip()) # Not Supported by Dronekit
+
+                cmd = Command(target_system, target_component,
+                              index, frame, command, curr_wp,
+                              param1, param2, param3, param4, param5, param6, param7,
+                              auto_continue)
+
+                cmd_list.append(cmd)
+
+        return cmd_list
+
+def add_cmd_list(cmd_list):
+    CMDS.clear()
+
+    for cmd in cmd_list:
+        CMDS.add(cmd)
+
+    CMDS.upload()
 
 
-VEHICLE.mode = VehicleMode("AUTO")  # Set mode to AUTO to start mission
+def save_cmd_list(cmd_list, path):
+    """ Saves a cmd_list to a desired path in Standard QGC Waypoint 110 Format."""
+    output = "QGC WPL 110"
 
-while True:
-    break
+    for cmd in cmd_list:
+        line = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+            cmd.seq, cmd.current, cmd.frame, cmd.command,
+            cmd.param1, cmd.param2, cmd.param3, cmd.param4,
+            cmd.x, cmd.y, cmd.z,
+            cmd.autocontinue)
 
+        output += line
 
-closing_seq()
-
+    with open(path, "w") as file_:
+        file_.write(output)
 
 def rotate_point(origin, point, angle):
     o_lat = origin.lat
@@ -233,3 +243,70 @@ def rotate_point(origin, point, angle):
     new_lon = x_p + o_lon
 
     return LocationGlobalRelative(new_lat, new_lon, point.alt)
+
+print "Clearing any existing commands..."
+CMDS.clear()
+
+#### Input Initial Commands ####
+
+
+print "Uploading new commands..."
+CMDS.upload()
+
+TAG_LIST = []
+
+TAKEOFF_ALT = VEHICLE.commands[0].z
+
+print "basic pre-arm checks..."
+# don't let the user try to arm until autopilot is ready
+while not VEHICLE.is_armable:
+    print " waiting for vehicle to initialise..."
+    time.sleep(1)
+
+print "arming motors..."
+# copter should arm in guided mode
+VEHICLE.mode = VehicleMode("GUIDED")
+VEHICLE.armed = True
+
+while not VEHICLE.armed:
+    print "waiting for arming..."
+    time.sleep(1)
+
+print "taking off from ({},{})".format(VEHICLE.home_location.lat, VEHICLE.home_location.lon)
+VEHICLE.simple_takeoff(TAKEOFF_ALT)
+
+while True:
+    print "altitude: ", VEHICLE.location.global_relative_frame.alt
+    if VEHICLE.location.global_relative_frame.alt >= TAKEOFF_ALT*.95:
+        print "reached target altitude"
+        break
+    time.sleep(1)
+
+
+VEHICLE.commands.next = 0 # Reset mission set to first (0) waypoint
+NEXT_WAYPOINT = VEHICLE.commands.next
+
+VEHICLE.mode = VehicleMode("AUTO")  # Set mode to AUTO to start mission
+
+print "Mission Started!"
+
+
+while True:
+    break
+
+
+#print 'Returning to Launch...'
+#VEHICLE.mode = VehicleMode("RTL")
+
+print "Setting LAND mode..."
+VEHICLE.mode = VehicleMode("LAND")
+
+print "Close vehicle object"
+VEHICLE.close()
+
+'''
+
+if SITL is not None:
+    SITL.stop()
+
+'''
