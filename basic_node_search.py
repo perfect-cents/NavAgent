@@ -1,9 +1,11 @@
-""" Basic Demonstration of a Node Search.
-
+"""
+    Basic Demonstration of a Node Search.
 """
 
 from string import ascii_lowercase
 import itertools
+
+
 
 POINT_LIST = [(8241.489, 2824.634, 27),
               (8245.800, 2814.630, 24),
@@ -90,6 +92,7 @@ class Edge(object):
     @hist.setter
     def hist(self, val):
         self._hist.append(val)
+
 
 EDGES = {}
 

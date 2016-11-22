@@ -11,12 +11,16 @@ from dronekit import connect, Vehicle, VehicleMode
 
 PARSER = argparse.ArgumentParser(description="External Argument Parser for NavAgent.")
 PARSER.add_argument("--connect",
-                    help=("vehicle connection target string. "
-                          "If not specified, SITL automatically started and used."))
+                    help=("vehicle connection target string."))
+
+PARSER.add_argument("--alt",
+                    help=("vehicle takeoff_alt."))
 
 PARSER_ARGS = PARSER.parse_args()
 
 CONNECTION_STRING = PARSER_ARGS.connect
+TAKEOFF_ALT = int(PARSER_ARGS.alt)
+
 
 print "Connecting to vehicle on: %s" % CONNECTION_STRING
 VEHICLE = connect(CONNECTION_STRING, wait_ready=True, vehicle_class=Vehicle)
@@ -27,17 +31,20 @@ VEHICLE.home_location = VEHICLE.location.global_frame
 CMDS = VEHICLE.commands
 CMD_LIST = []
 
-def arm_and_takeoff(takeoff_alt=2):
+def arm_and_takeoff(takeoff_alt):
     print "basic pre-arm checks..."
     # don't let the user try to arm until autopilot is ready
+
+    VEHICLE.armed = True
+
     while not VEHICLE.is_armable:
         print " waiting for vehicle to initialise..."
-        time.sleep(1)
+        time.sleep(5)
 
     print "arming motors..."
     # copter should arm in guided mode
     VEHICLE.mode = VehicleMode("GUIDED")
-    VEHICLE.armed = True
+
 
     while not VEHICLE.armed:
         print "waiting for arming..."
@@ -64,7 +71,7 @@ def add_cmds(cmd_list):
 print "Clearing any existing commands..."
 CMDS.clear()
 
-arm_and_takeoff(1)
+arm_and_takeoff(TAKEOFF_ALT)
 
 print "Mission Started!"
 

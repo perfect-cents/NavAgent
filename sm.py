@@ -1,14 +1,15 @@
-# pylint: disable=multiple-statements, fixme, line-too-long, missing docstring, invalid-name
-
+"""
+    Simple State Machine
+"""
 
 class State(object):
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, name):
+        self.name = name
 
 class Model_State(State):
     """docstring for Model_State."""
-    def __init__(self, id):
-        super(Model_State, self).__init__(id)
+    def __init__(self, name):
+        super(Model_State, self).__init__(name)
 
 class Machine(object):
     """ The Main State Machine Class"""
@@ -54,7 +55,7 @@ class Machine(object):
                 if state in self.states:
                     raise ValueError("{} is already registered.".format(state))
                 state = State(state)
-            self.states[state.id] = state
+            self.states[state.name] = state
 
     def del_states(self, states):
         states = self._list_it(states)
@@ -63,21 +64,21 @@ class Machine(object):
                 self.get_state(state)
                 del self.states[state]
 
-    def switch(self, start, dest):
-        def states_check(states):
-            states = self._list_it(states)
-            for state in states:
-                if isinstance(state, str) and state in self.states:
-                    if self._current_state.id == state:
-                        return True
-                else:
-                    return False
+    def _states_check(self, states):
+        states = self._list_it(states)
+        for state in states:
+            if isinstance(state, str) and state in self.states:
+                if self._current_state.id == state:
+                    return True
+            else:
+                return False
 
+    def switch(self, start, dest):
         if dest not in self.states:
             raise ValueError("{} is not a valid destination state.".format(dest))
         elif start == '*':
             self._current_state = self.states[dest]
-        elif states_check(start):
+        elif self._states_check(start):
             self._current_state = self.states[dest]
         else:
             raise ValueError("{} is not a valid starting state set.".format(start))

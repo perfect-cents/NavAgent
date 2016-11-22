@@ -1,5 +1,4 @@
 """A base template for copter NavAgent Scripts.
-
 """
 
 
@@ -29,7 +28,7 @@ if not CONNECTION_STRING: # Start SITL if no connection string specified
     import dronekit_sitl
     SITL = dronekit_sitl.start_default()
     CONNECTION = SITL.connection_string()
-
+    
 '''
 
 print "Connecting to vehicle on: %s" % CONNECTION_STRING
