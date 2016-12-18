@@ -11,53 +11,27 @@ def json_cmds(json_path):
         json_string = json_file.read()
         json_file.close()
 
-    json_string = """
-    {
-        "0": {
-            "lon": "32.679",
-            "lat": "12.345",
-            "alt": "10",
-            "misson": "1",
-            "data": "lots"
-        },
-        "1": {
-            "lon": "32.679",
-            "lat": "12.345",
-            "alt": "10",
-            "misson": "1",
-            "data": "lots"
-        },
-        "2": {
-            "lon": "32.679",
-            "lat": "12.345",
-            "alt": "10",
-            "misson": "1",
-            "data": "a little"
-        },
-        "3": {
-            "lon": "32.679",
-            "lat": "12.345",
-            "alt": "10",
-            "misson": "2",
-            "data": "medium amount"
-        }
-    }"""
-
     json_dict = json.loads(json_string)
 
-    cmd_list = []
+    cmd_dict = []
 
     for key in range(len(json_dict)):
-        cmd_list.append((Command(0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
-                                 mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0,
-                                 json_dict[str(key)]['lat'],
-                                 json_dict[str(key)]['lon'],
-                                 json_dict[str(key)]['alt'])),
+        cmd_dict.append((
+            Command(0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
+                    mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0, 0, 0, 0, 0,
+                    json_dict[str(key)]['lat'],
+                    json_dict[str(key)]['lon'],
+                    json_dict[str(key)]['alt'])),
+            json_dict[str(key)]['mission'],
+            json_dict[str(key)]['data'])
 
-                        json_dict[str(key)]['mission'],
-                        json_dict[str(key)]['data'])
+    return cmd_dict
 
-    return cmd_list
+def cmd_dict_to_cmd_list(cmd_dict):
+    cmd_list = []
+
+    for elem in cmd_dict:
+        
 
 if __name__ == '__main__':
     main()
